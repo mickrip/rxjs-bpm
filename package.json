@@ -1,0 +1,25 @@
+{
+  "name": "@mickrip/rxjs-bpm",
+  "version": "0.0.1",
+  "description": "Calculate BPM from number of incoming events",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsup",
+    "clean": "rimraf ./dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "test": "vitest"
+  },
+  "author": "Mick Rippon",
+  "license": "ISC",
+  "devDependencies": {
+    "rimraf": "^5.0.8",
+    "tsup": "^8.1.0",
+    "typescript": "^5.5.3",
+    "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "rxjs": "^7.8.1"
+  }
+}
