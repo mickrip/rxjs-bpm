@@ -1,25 +1,47 @@
 {
   "name": "@mickrip/rxjs-bpm",
-  "version": "0.0.1",
-  "description": "Calculate BPM from number of incoming events",
+  "version": "0.1.0",
+  "description": "Stable live tap-tempo (BPM) detection from any event source",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./rxjs": {
+      "types": "./dist/rxjs.d.ts",
+      "import": "./dist/rxjs.mjs",
+      "require": "./dist/rxjs.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "clean": "rimraf ./dist",
     "prepublishOnly": "npm run clean && npm run build",
-    "test": "vitest"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "Mick Rippon",
   "license": "ISC",
   "devDependencies": {
     "rimraf": "^5.0.8",
+    "rxjs": "^7.8.1",
     "tsup": "^8.1.0",
     "typescript": "^5.5.3",
     "vitest": "^1.6.0"
   },
-  "dependencies": {
+  "peerDependencies": {
     "rxjs": "^7.8.1"
+  },
+  "peerDependenciesMeta": {
+    "rxjs": {
+      "optional": true
+    }
   }
 }

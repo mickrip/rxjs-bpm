@@ -119,10 +119,10 @@ downstream library keeps its tempo.
 
 ### Stage 3 — Interval window
 
-Accepted intervals go into a ring buffer of the last `windowSize = 12`
-intervals (≈ 3 bars of 4/4). Bigger than the current 8-timestamp window for
-better averaging, still small enough to track a change within a couple of
-bars.
+Accepted intervals go into a ring buffer of the last `windowSize = 16`
+intervals (4 bars of 4/4). Each sample stores both its normalized one-beat
+value and its original gap + beat span (see Stage 4), which the estimator
+depends on.
 
 ### Stage 4 — Octave folding (missed taps & double taps)
 
@@ -138,73 +138,89 @@ if |interval / (m/2) - 1| ≤ foldTolerance:        interval := interval × 2   
 - A missed tap produces one interval at ~2× the beat; folding it recovers a
   perfectly good sample instead of discarding data.
 - Folding only activates once the window has ≥ 4 intervals (a median worth
-  trusting). Folded samples are flagged and get **half weight** in Stage 6.
+  trusting). A folded sample records its true beat span (2 for a missed tap,
+  0.5 for a double tap), which keeps the Stage 6 estimator exact.
 
-### Stage 5 — Robust outlier rejection (median + MAD)
+### Stage 5 — Outlier statistics (median + deviation band)
 
 The current code's "trust the first interval" baseline is fragile — if the
 baseline itself is bad, everything is judged against garbage. Replace with a
-median-based test over the window:
+median-based test over the normalized window values:
 
 ```
-m   = median(window)
-dev = |interval - m| / m
-keep iff dev ≤ outlierTolerance (0.12)
+m   = median(window values)
+dev = |value - m| / m
+consistent iff dev ≤ outlierTolerance (0.12)
 ```
 
 Median is robust up to 50% contamination, so one or two sloppy taps never
-shift the baseline. Rejected intervals still occupy a slot in the ring buffer
-(so persistent "outliers" — i.e. an actual tempo change — age the old data
-out) but are excluded from the average.
+shift the baseline. **Implementation finding:** these statistics gate
+locking and feed confidence, but they must NOT filter the estimate itself —
+excluding middle samples destroys the telescoping property Stage 6 relies
+on, and beat-count normalization already absorbs musical outliers.
 
-### Stage 6 — Weighted estimate
+### Stage 6 — Telescoped rate estimators
 
-Average the surviving intervals with **exponential recency weighting**, then
-convert once at the end:
+The key insight (learned the hard way in M1): consecutive intervals share
+tap timestamps, so **summing a contiguous run of gaps telescopes the jitter
+away** — only the two endpoint taps' noise survives. Any per-interval
+average (weighted or not) throws that property out and *amplifies* human
+jitter: a 6%-sloppy player pushed a weighted-mean estimator up to 11 BPM
+off, while the telescoped rate stays within ~1 BPM.
+
+Both estimates are therefore beats-per-timespan rates:
 
 ```
-weight(i) = halfLifeDecay ^ age(i)        // default decay 0.85 per step
-          × 0.5 if the sample was octave-folded
-meanITI   = Σ(w·interval) / Σw
-rawBpm    = 60000 / meanITI
+rate(samples) = 60000 × Σbeats / Σgap
+rawBpm        = rate(last ≤4 samples)   // fast tracker: DETECTS change
+preciseBpm    = rate(whole window)      // stable: the value REPORTED
 ```
 
-Two fixes vs. the current implementation baked in here:
-
-- **Average intervals, then invert** — the current code converts each interval
-  to BPM first and averages BPMs, which is a different (biased) statistic
-  because `1/x` is convex. Averaging in interval space is the correct
-  period estimate.
-- Recency weighting means a genuine tempo change pulls the estimate over
-  within ~4–6 taps instead of waiting for the whole window to flush.
+Folded samples contribute their true beat span (0.5 / 2), so double taps
+and missed beats don't bias the rate. σ of the precise estimate at 6% tap
+jitter over a 16-beat window is ≈ 0.6 BPM; the fast tracker is noisy
+(±2–3 BPM) but reacts to a real change within ~3 taps.
 
 ### Stage 7 — Output stabilisation (hysteresis + quantisation)
 
-`rawBpm` still wobbles with human timing (±2–4 BPM is normal even for good
-players). The *reported* `bpm` goes through a hysteresis latch:
+`rawBpm` wobbles with human timing (±2–4 BPM is normal even for good
+players). The *reported* `bpm` goes through a hysteresis latch in which the
+fast tracker only **triggers** and the precise estimate **judges**:
 
 ```
-if no reported bpm yet:            report round(rawBpm × 2) / 2   // 0.5 BPM grid
+if no reported bpm yet:                     report quantize(preciseBpm)
 else if |rawBpm - reported| ≥ hysteresisBpm (1.5):
     count consecutive readings beyond the band
-    if count ≥ confirmTaps (3):    report the new quantised value
-else:                              keep reporting the old value; reset count
+    if count ≥ confirmTaps (3) AND |preciseBpm - reported| ≥ hysteresisBpm:
+        report quantize(preciseBpm)
+else (in-band) — drift correction:
+    if quantize(preciseBpm) disagrees with the report by the SAME value
+    for driftTaps (6) consecutive taps: adopt it quietly
 ```
 
 - The 0.5-BPM quantisation grid (`quantizeBpm`, settable to 1.0 or 0 for off)
   gives downstream consumers a value that *stays put*.
 - Requiring `confirmTaps` consecutive out-of-band readings distinguishes "the
-  drummer moved to 126" (sustained) from "I tapped one beat late" (transient).
+  drummer moved to 126" (sustained) from "I tapped one beat late" (transient),
+  and the precise-judge condition stops fast-tracker noise from re-latching
+  when the underlying tempo hasn't moved.
+- Drift correction fixes the small settle error a re-latch can leave inside
+  the dead band (e.g. landing on 125.5 during a 120→126 transition). Jittery
+  input keeps flipping the candidate value, so it never fires on noise.
 - This replaces the current `distinctUntilChanged` + late rounding, which
   compares unrounded floats and re-emits the same rounded number repeatedly.
 
 ### Stage 8 — State machine & confidence
 
 ```
-idle ── tap ──▶ collecting ── ≥ minTaps(4) & CV ≤ 0.1 ──▶ locked
-  ▲                │  ▲                                      │
-  └── reset() ─────┘  └───── session reset (keeps bpm) ◀─────┘
+idle ── tap ──▶ collecting ── ≥ minTaps(4) & CV ≤ 0.1 & SE gate ──▶ locked
+  ▲                │  ▲                                               │
+  └── reset() ─────┘  └───────── session reset (keeps bpm) ◀──────────┘
 ```
+
+The SE gate (`cv/√n ≤ lockSeMax`, waived once the window is full) makes
+lock time adapt to the player: machine-clean tapping locks at `minTaps`,
+sloppy tapping has to earn its first report with more taps.
 
 - `idle`: no data. `bpm = null`.
 - `collecting`: fewer than `minTaps` intervals, or the window is too noisy.
@@ -249,13 +265,15 @@ confidence = tapFactor × consistencyFactor × freshnessFactor
 | `refractoryBeatFraction` | 0.4 | Adaptive debounce vs. current beat |
 | `sessionTimeoutBeats` | 2.5 | Gap that starts a new session |
 | `sessionTimeoutMs` | 2000 | Session gap fallback with no estimate |
-| `windowSize` | 12 | Intervals kept |
+| `windowSize` | 16 | Intervals kept (4 bars of 4/4) |
 | `foldTolerance` | 0.15 | Octave-fold matching band |
-| `outlierTolerance` | 0.12 | Median-deviation rejection band |
-| `halfLifeDecay` | 0.85 | Recency weight per step of age |
+| `outlierTolerance` | 0.12 | Median-deviation consistency band |
 | `minTaps` | 4 | Intervals needed to lock |
+| `lockCvMax` | 0.1 | Max window CV to lock |
+| `lockSeMax` | 0.015 | Max relative standard error for first report |
 | `hysteresisBpm` | 1.5 | Dead band around reported BPM |
 | `confirmTaps` | 3 | Out-of-band readings needed to re-latch |
+| `driftTaps` | 6 | Consecutive agreeing taps for in-band drift correction |
 | `quantizeBpm` | 0.5 | Output grid (0 = off) |
 | `minBpm` / `maxBpm` | none | Optional sanity range (fold, don't drop) |
 
