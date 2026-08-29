@@ -65,10 +65,15 @@ export function createBPMObservable(event$: Observable<unknown>): Observable<num
 					finalIntervals.length;
 				return averageBPM;
 			}),
-			distinctUntilChanged(),
 			filter((bpm) => bpm > 60),
+			// Round before de-duplicating, so that distinctUntilChanged compares the
+			// value that is actually emitted. Comparing the raw average instead would
+			// dedupe nothing (real timings always jitter, so every average differs by
+			// some fraction) while still letting repeats of the same rounded BPM through.
+			map((bpm) => Math.round(bpm)),
+			distinctUntilChanged(),
 			tap((bpm) => {
-				bpmSubject.next(Math.round(bpm));
+				bpmSubject.next(bpm);
 			}),
 			share(),
 		)
