@@ -26,7 +26,9 @@ describe("createBPMObservable", () => {
 		});
 	});
 
-	afterEach(() => vi.useRealTimers());
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	describe("basic tempo inference", () => {
 		it("does not infer intent from one isolated click", () => {
