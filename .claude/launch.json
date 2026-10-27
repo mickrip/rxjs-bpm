@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lab",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "lab"],
+      "port": 5174
+    }
+  ]
+}

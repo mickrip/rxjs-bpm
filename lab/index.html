@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Tempo tracker lab</title>
+		<link rel="stylesheet" href="./style.css" />
+	</head>
+	<body>
+		<main>
+			<header>
+				<h1>Tempo tracker lab</h1>
+				<p class="sub">
+					Metronome&nbsp;1 is the truth. Tap along with the spacebar and the tracker
+					infers Metronome&nbsp;2. Success is not hearing them apart.
+					<a href="./follow.html" style="color: var(--accent-2)">Follow metronome</a>
+				</p>
+			</header>
+
+			<section class="controls">
+				<label class="field">
+					<span>Scenario</span>
+					<select id="scenario"></select>
+				</label>
+				<label class="field narrow">
+					<span>When you tap</span>
+					<select id="anchorMode">
+						<option value="1" selected>Snap — the tap is the beat</option>
+						<option value="2">Blend last 2 taps</option>
+						<option value="3">Average last 3 taps</option>
+					</select>
+				</label>
+				<label class="field">
+					<span>Click sound</span>
+					<div class="mutes">
+						<button id="mute1" class="toggle on" type="button">Metronome 1</button>
+						<button id="mute2" class="toggle on" type="button">Metronome 2</button>
+					</div>
+				</label>
+				<label class="field narrow">
+					<span>Latency trim <b id="trimValue">0 ms</b></span>
+					<input id="trim" type="range" min="-120" max="120" step="1" value="0" />
+				</label>
+				<button id="start" class="primary" type="button">Start</button>
+				<button id="calibrate" class="ghost" type="button">Calibrate…</button>
+				<button id="reset" class="ghost" type="button">Reset tracker</button>
+			</section>
+
+			<section class="tapzone" id="tapzone">
+				<kbd>space</kbd>
+				<span id="tapHint">press to tap the beat</span>
+				<div class="pulses">
+					<span class="pulse p1" id="pulse1"></span>
+					<span class="pulse p2" id="pulse2"></span>
+				</div>
+			</section>
+
+			<section class="readouts">
+				<div class="stat">
+					<span class="label">Metronome 1</span>
+					<span class="value" id="trueBpm">—</span>
+					<span class="unit">bpm</span>
+				</div>
+				<div class="stat">
+					<span class="label">Metronome 2</span>
+					<span class="value" id="estBpm">—</span>
+					<span class="unit">bpm</span>
+				</div>
+				<div class="stat">
+					<span class="label">Phase error</span>
+					<span class="value" id="phaseErr">—</span>
+					<span class="unit">ms</span>
+				</div>
+				<div class="stat">
+					<span class="label">Within 20ms</span>
+					<span class="value" id="within">—</span>
+					<span class="unit">%</span>
+				</div>
+				<div class="stat">
+					<span class="label">Taps</span>
+					<span class="value" id="tapCount">0</span>
+					<span class="unit">total</span>
+				</div>
+				<div class="stat">
+					<span class="label">Output latency</span>
+					<span class="value" id="latency">—</span>
+					<span class="unit">ms compensated</span>
+				</div>
+				<div class="stat">
+					<span class="label">Horizon</span>
+					<span class="value" id="horizon">—</span>
+					<span class="unit">taps</span>
+				</div>
+			</section>
+
+			<section class="viz">
+				<div class="vizhead">
+					<span>Phase error over time</span>
+					<span class="scale"><i>−60ms</i><i>0</i><i>+60ms</i></span>
+				</div>
+				<canvas id="strip" width="1200" height="180"></canvas>
+				<p class="legend">
+					Each column is one beat of Metronome&nbsp;1. Height is how far
+					Metronome&nbsp;2 landed from it; the band is the ±20ms window inside which
+					two clicks read as one sound. Vertical marks are your taps.
+				</p>
+			</section>
+		</main>
+		<script type="module" src="./main.ts"></script>
+	</body>
+</html>

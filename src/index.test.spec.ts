@@ -1,4 +1,4 @@
-import { Subject } from "rxjs";
+import { Observable, Subject, throwError } from "rxjs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createBPMObservable } from "./index";
 
@@ -128,10 +128,50 @@ describe("createBPMObservable", () => {
 			bpm$.subscribe((bpm) => lateValues.push(bpm));
 			expect(lateValues).toEqual([120]);
 		});
+
+		it("tears down the source subscription once all subscribers unsubscribe", () => {
+			let subscribed = 0;
+			let cleaned = 0;
+			const source$ = new Observable<void>(() => {
+				subscribed += 1;
+				return () => {
+					cleaned += 1;
+				};
+			});
+
+			const bpm$ = createBPMObservable(source$);
+			expect(subscribed).toBe(1);
+			expect(cleaned).toBe(0);
+
+			const sub1 = bpm$.subscribe();
+			const sub2 = bpm$.subscribe();
+			expect(subscribed).toBe(1);
+
+			sub1.unsubscribe();
+			expect(cleaned).toBe(0);
+
+			sub2.unsubscribe();
+			expect(cleaned).toBe(1);
+		});
+
+		it("propagates source completion and errors to subscribers", () => {
+			const events$ = new Subject<void>();
+			const bpm$ = createBPMObservable(events$);
+			let completed = false;
+			bpm$.subscribe({ complete: () => { completed = true; } });
+			events$.complete();
+			expect(completed).toBe(true);
+
+			const errSource$ = throwError(() => new Error("boom"));
+			const errBpm$ = createBPMObservable(errSource$);
+			let caught: unknown = null;
+			errBpm$.subscribe({ error: (err) => { caught = err; } });
+			expect(caught).toBeInstanceOf(Error);
+		});
 	});
 
 	describe("unresolved intent heuristics", () => {
-		it.fails("does not treat one late accidental tap as a new believable tempo", () => {
+		it("does not treat one late accidental tap as a new believable tempo", () => {
 			const { values, tapGaps } = createTapHarness();
 			// 120 BPM is established; one hesitation is weak evidence for 75 BPM.
 			tapGaps([0, 500, 500, 500, 800, 500, 500]);
@@ -146,7 +186,7 @@ describe("createBPMObservable", () => {
 			expect(values).toEqual([]);
 		});
 
-		it.fails("does not anchor the estimate to a wildly mistimed newest tap", () => {
+		it("does not anchor the estimate to a wildly mistimed newest tap", () => {
 			const { values, tapGaps } = createTapHarness();
 			// Six taps establish 120 BPM; one early tap should not outweigh them.
 			tapGaps([0, 500, 500, 500, 500, 500, 260]);

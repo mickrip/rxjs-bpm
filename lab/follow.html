@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Follow metronome</title>
+		<link rel="stylesheet" href="./style.css" />
+		<link rel="stylesheet" href="./follow.css" />
+	</head>
+	<body>
+		<main>
+			<header>
+				<h1>Follow metronome</h1>
+				<p class="sub">
+					Tap the beat on the spacebar. The light infers your tempo and keeps
+					flashing on it. Stop tapping and it carries on, tap again to steer it.
+					<a href="./index.html">Back to the lab</a>
+				</p>
+			</header>
+
+			<section class="controls">
+				<label class="field narrow">
+					<span>When you tap</span>
+					<select id="anchorMode">
+						<option value="1" selected>Snap — the tap is the beat</option>
+						<option value="2">Blend last 2 taps</option>
+						<option value="3">Average last 3 taps</option>
+					</select>
+				</label>
+				<label class="field narrow">
+					<span>Flash earlier by <b id="leadValue">0 ms</b></span>
+					<input id="lead" type="range" min="-60" max="120" step="1" value="0" />
+				</label>
+				<button id="reset" class="ghost" type="button">Reset (Esc)</button>
+			</section>
+
+			<section class="stage">
+				<div class="lamp" id="lamp"></div>
+				<div class="tapring" id="tapring"></div>
+				<div class="phase"><div class="phasefill" id="phase"></div></div>
+				<span class="hint" id="hint">tap the spacebar 4 times to start</span>
+			</section>
+
+			<section class="readouts">
+				<div class="stat">
+					<span class="label">Tempo</span>
+					<span class="value" id="bpm">—</span>
+					<span class="unit">bpm</span>
+				</div>
+				<div class="stat">
+					<span class="label">Last tap</span>
+					<span class="value" id="lastErr">—</span>
+					<span class="unit">ms vs the light</span>
+				</div>
+				<div class="stat">
+					<span class="label">Recent error</span>
+					<span class="value" id="meanErr">—</span>
+					<span class="unit">mean ms, last 8 taps</span>
+				</div>
+				<div class="stat">
+					<span class="label">Taps</span>
+					<span class="value" id="taps">0</span>
+					<span class="unit">total</span>
+				</div>
+				<div class="stat">
+					<span class="label">Frame</span>
+					<span class="value" id="frame">—</span>
+					<span class="unit">ms, added to the lead</span>
+				</div>
+			</section>
+		</main>
+		<script type="module" src="./follow.ts"></script>
+	</body>
+</html>
