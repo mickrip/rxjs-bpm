@@ -134,6 +134,7 @@ export function createBPMObservable(event$: Observable<unknown>): Observable<num
 	});
 }
 
+export { pulse, type Pulse, type PulseOptions } from "./pulse";
 export {
 	TempoTracker,
 	trackTaps,
